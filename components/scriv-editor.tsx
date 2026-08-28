@@ -102,7 +102,7 @@ export function ScrivEditor() {
   const [text, setText] = useState(sampleText)
   const [level, setLevel] = useState('B1')
   const [selected, setSelected] = useState<Annotation | null>(null)
-  const [mode, setMode] = useState<'notice' | 'hint' | 'explain' | 'correction'>('notice')
+  const [mode, setMode] = useState<'hint' | 'explain' | 'correction'>('hint')
   const [annotations, setAnnotations] = useState(demoAnnotations)
   const [thinking, setThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -159,16 +159,19 @@ export function ScrivEditor() {
       span.dataset.annotation = annotation.id
       span.className = `annotation ${categoryClass(annotation.category)}`
       span.append(document.createTextNode(text.slice(annotation.start, annotation.end)))
-      const marker = document.createElement('sup')
-      marker.textContent = annotation.category === 'positive' ? '✓' : annotation.category === 'word_order' ? 'WO' : annotation.category === 'noun_gender' ? 'GEN' : ''
-      span.append(marker)
+      const markerLabel = annotation.category === 'positive' ? '✓' : annotation.category === 'word_order' ? 'WO' : annotation.category === 'noun_gender' ? 'GEN' : annotation.category === 'spelling' ? 'SP' : ''
+      if (markerLabel) {
+        const marker = document.createElement('sup')
+        marker.textContent = markerLabel
+        span.append(marker)
+      }
       editor.append(span)
       cursor = annotation.end
     }
     if (cursor < text.length) editor.append(document.createTextNode(text.slice(cursor)))
     if (hasSelection || savedSelection) restoreSelection(editor, selectionStart, selectionEnd)
     pendingSelection.current = null
-  }, [annotations])
+  }, [annotations, text])
 
   function updateText(event: React.FormEvent<HTMLDivElement>) {
     // Remove demo/previous feedback immediately without replacing the editable root.
@@ -202,7 +205,7 @@ export function ScrivEditor() {
       <section className="mx-auto w-full max-w-5xl px-6 pb-16 pt-12 lg:px-10 lg:pt-20">
         <div className="mx-auto max-w-3xl"><div className="mb-7 flex items-center justify-between"><div><p className="eyebrow">A quiet place to practice</p><h1 className="mt-2 font-serif text-3xl tracking-tight sm:text-4xl">Write your way there.</h1></div><div className="flex items-center gap-2 text-xs text-muted-foreground">{thinking && <><span className="thinking-dot" /> Thinking…</>}</div></div>
           {error && <p role="alert" className="mb-4 rounded-xl border border-[#bd6262]/30 bg-[#bd6262]/8 px-4 py-3 text-sm leading-6 text-[#8a3f3f]">{error}</p>}
-          <div className="editor-shell" onClick={() => selected && setSelected(null)}><div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Swedish writing editor" aria-multiline="true" onInput={updateText} onClick={(e) => { const target = e.target as HTMLElement; const id = target.dataset.annotation; if (id) { e.stopPropagation(); const found = annotations.find((a) => a.id === id); if (found) { setSelected(found); setMode('notice') } } }} className="editor min-h-80 whitespace-pre-wrap text-lg leading-[2.05] outline-none" spellCheck="false"></div>{selected && <FeedbackPopover annotation={selected} mode={mode} setMode={setMode} close={() => setSelected(null)} />}</div>
+          <div className="editor-shell" onClick={() => selected && setSelected(null)}><div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Swedish writing editor" aria-multiline="true" onInput={updateText} onClick={(e) => { const target = (e.target as HTMLElement).closest('[data-annotation]') as HTMLElement | null; const id = target?.dataset.annotation; if (id) { e.stopPropagation(); const found = annotations.find((a) => a.id === id); if (found) { setSelected(found); setMode('hint') } } }} className="editor min-h-80 whitespace-pre-wrap text-lg leading-[2.05] outline-none" spellCheck="false"></div>{selected && <FeedbackPopover annotation={selected} mode={mode} setMode={setMode} close={() => setSelected(null)} />}</div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Write naturally. Feedback appears as you pause.</p><p className="text-xs text-muted-foreground">{text.length} characters</p></div>
           <Legend />
           <div className="mt-14 border-t border-border pt-6"><div className="flex items-center gap-2"><Lightbulb className="h-4 w-4 text-accent-foreground" /><h2 className="text-sm font-semibold">Things to notice</h2></div><div className="mt-4 flex flex-wrap gap-2">{['Word order · 2', 'Noun gender · 1', 'Natural phrasing · 2'].map((item) => <button key={item} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">{item}</button>)}</div><p className="mt-5 max-w-xl text-sm leading-6 text-muted-foreground">A few sentences have word order worth reviewing. See if you can spot the pattern before asking for a hint.</p></div>
@@ -214,4 +217,34 @@ export function ScrivEditor() {
 
 function Legend() { const items = [['annotation-spelling', 'Spelling'], ['annotation-grammar', 'Grammar'], ['annotation-order', 'Word order'], ['annotation-natural', 'Natural Swedish'], ['annotation-positive', 'Good usage']]; return <div className="mt-10 flex flex-wrap gap-x-5 gap-y-2 border-t border-border/70 pt-4">{items.map(([className, label]) => <div key={label} className="flex items-center gap-2 text-xs text-muted-foreground"><span className={`legend-mark ${className}`} />{label}</div>)}</div> }
 
-function FeedbackPopover({ annotation, mode, setMode, close }: { annotation: Annotation; mode: 'notice' | 'hint' | 'explain' | 'correction'; setMode: (mode: 'notice' | 'hint' | 'explain' | 'correction') => void; close: () => void }) { return <aside className="feedback-popover" role="dialog" aria-label={`${annotation.label} feedback`} onClick={(e) => e.stopPropagation()}><div className="flex items-start justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{annotation.label}</div><div className="mt-2 font-serif text-lg">{annotation.text}</div></div><button aria-label="Close feedback" onClick={close} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button></div>{mode !== 'notice' && <p className="mt-4 text-sm leading-6 text-foreground/75">{mode === 'hint' ? annotation.hint : mode === 'explain' ? annotation.explanation : <><span className="text-muted-foreground">Try: </span><strong>{annotation.correction}</strong></>}</p>}{annotation.category === 'positive' ? <p className="mt-4 text-sm leading-6 text-foreground/75">{annotation.explanation}</p> : <div className="mt-5 flex flex-wrap gap-2"><button onClick={() => setMode('hint')} className={`popover-button ${mode === 'hint' ? 'active' : ''}`}>Hint</button><button onClick={() => setMode('explain')} className={`popover-button ${mode === 'explain' ? 'active' : ''}`}>Explain</button><button onClick={() => setMode('correction')} className={`popover-button ${mode === 'correction' ? 'active' : ''}`}>Show correction</button></div>}<div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground"><Sparkles className="h-3 w-3" /> {annotation.rule}</div></aside> }
+function FeedbackPopover({ annotation, mode, setMode, close }: { annotation: Annotation; mode: 'hint' | 'explain' | 'correction'; setMode: (mode: 'hint' | 'explain' | 'correction') => void; close: () => void }) {
+  const body = mode === 'explain'
+    ? annotation.explanation
+    : mode === 'correction'
+      ? <><span className="text-muted-foreground">Try: </span><strong>{annotation.correction}</strong></>
+      : annotation.hint
+
+  return (
+    <aside className="feedback-popover" role="dialog" aria-label={`${annotation.label} feedback`} onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{annotation.label}</div>
+          <div className="mt-2 font-serif text-lg">{annotation.text}</div>
+        </div>
+        <button aria-label="Close feedback" onClick={close} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+      </div>
+      {annotation.category === 'positive' ? (
+        <p className="mt-4 text-sm leading-6 text-foreground/75">{annotation.explanation}</p>
+      ) : (
+        <>
+          <p className="mt-4 text-sm leading-6 text-foreground/75">{body}</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button onClick={() => setMode(mode === 'explain' ? 'hint' : 'explain')} className={`popover-button ${mode === 'explain' ? 'active' : ''}`}>Explain</button>
+            <button onClick={() => setMode(mode === 'correction' ? 'hint' : 'correction')} className={`popover-button ${mode === 'correction' ? 'active' : ''}`}>Show correction</button>
+          </div>
+        </>
+      )}
+      <div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground"><Sparkles className="h-3 w-3" /> {annotation.rule}</div>
+    </aside>
+  )
+}

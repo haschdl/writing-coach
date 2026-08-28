@@ -14,19 +14,26 @@
 .eyebrow { color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
 .editor-shell { position: relative; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in oklab, var(--card) 82%, transparent); padding: 30px 32px 34px; box-shadow: 0 16px 45px color-mix(in oklab, var(--foreground) 5%, transparent); }
 .editor { caret-color: var(--primary); }
-.annotation { cursor: pointer; transition: background-color .2s ease; }
+.annotation { cursor: pointer; transition: background-color .2s ease; text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
 .annotation:hover { background: color-mix(in oklab, var(--accent) 22%, transparent); }
-.annotation-order { border-bottom: 2px dotted #7c63b8; }
-.annotation-grammar { border-bottom: 2px solid #4e8fac; }
+.annotation-spelling { text-decoration-line: underline; text-decoration-style: wavy; text-decoration-color: #bd6262; }
+.annotation-order { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: #7c63b8; }
+.annotation-grammar { text-decoration-line: underline; text-decoration-style: solid; text-decoration-color: #4e8fac; }
 .annotation-natural { background: color-mix(in oklab, #d68c42 14%, transparent); border-radius: 3px; }
-.annotation-positive { border-bottom: 2px solid #669f7f; }
+.annotation-positive { text-decoration-line: underline; text-decoration-style: solid; text-decoration-color: #669f7f; }
 .annotation sup { margin-left: 2px; color: var(--muted-foreground); font-family: var(--font-sans); font-size: 8px; font-weight: 600; letter-spacing: .04em; vertical-align: super; }
 .feedback-popover { position: absolute; z-index: 10; right: 20px; top: calc(100% - 10px); width: min(330px, calc(100% - 40px)); border: 1px solid var(--border); border-radius: 12px; background: var(--popover); padding: 18px; box-shadow: 0 18px 45px color-mix(in oklab, var(--foreground) 14%, transparent); animation: pop .16s ease-out; }
 .popover-button { border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; color: var(--muted-foreground); font-size: 12px; transition: .2s ease; }
 .popover-button:hover, .popover-button.active { border-color: var(--primary); color: var(--primary); background: var(--secondary); }
-.legend-mark { width: 22px; height: 8px; display: inline-block; border-bottom: 2px solid #4e8fac; }
-.legend-mark.annotation-spelling { border-bottom: 2px wavy #bd6262; }
-.legend-mark.annotation-order { border-bottom: 2px dotted #7c63b8; }
+.legend-mark { width: 22px; height: 8px; display: inline-block; border-bottom: 1px solid #4e8fac; }
+.legend-mark.annotation-spelling {
+  border-bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath fill='none' stroke='%23bd6262' stroke-width='1' d='M0 2 Q2 0 4 2 T8 2'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: center bottom;
+  background-size: 8px 4px;
+}
+.legend-mark.annotation-order { border-bottom: 1px dotted #7c63b8; }
 .legend-mark.annotation-natural { background: color-mix(in oklab, #d68c42 20%, transparent); border: 0; border-radius: 2px; }
 .legend-mark.annotation-positive { border-bottom-color: #669f7f; }
 .thinking-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite alternate; }
