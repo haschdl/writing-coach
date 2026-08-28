@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Lightbulb, Settings2, Sparkles, X } from 'lucide-react'
 
-type Category = 'typo' | 'word_order' | 'subordinate_clause' | 'noun_gender' | 'idiomatic' | 'positive'
+type Category = 'spelling' | 'word_order' | 'subordinate_clause' | 'noun_gender' | 'adjective_agreement' | 'verb_form' | 'pronoun' | 'reflexive' | 'idiomatic' | 'style' | 'positive'
 type Annotation = { id: string; start: number; end: number; text: string; category: Category; label: string; hint: string; explanation: string; correction: string; rule: string }
 
 const sampleText = 'Igår jag gick till affären eftersom jag hade inte någon mjölk hemma. Jag köpte ett banan och några andra saker. Efter det träffade jag min kompis och vi pratade om jobbet. Det var en mycket rolig kväll.'
@@ -17,7 +17,85 @@ const demoAnnotations: Annotation[] = [
 ]
 
 function categoryClass(category: Category) {
-  return { typo: 'annotation-spelling', word_order: 'annotation-order', subordinate_clause: 'annotation-grammar', noun_gender: 'annotation-grammar', idiomatic: 'annotation-natural', positive: 'annotation-positive' }[category]
+  return {
+    spelling: 'annotation-spelling',
+    word_order: 'annotation-order',
+    subordinate_clause: 'annotation-grammar',
+    noun_gender: 'annotation-grammar',
+    adjective_agreement: 'annotation-grammar',
+    verb_form: 'annotation-grammar',
+    pronoun: 'annotation-grammar',
+    reflexive: 'annotation-grammar',
+    idiomatic: 'annotation-natural',
+    style: 'annotation-natural',
+    positive: 'annotation-positive',
+  }[category] ?? 'annotation-grammar'
+}
+
+function getSelectionOffset(root: HTMLElement, node: Node, offset: number) {
+  let total = 0
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (current) => current.parentElement?.closest('sup') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  })
+  while (walker.nextNode()) {
+    const current = walker.currentNode
+    if (current === node) return total + offset
+    total += current.textContent?.length ?? 0
+  }
+  return total
+}
+
+function restoreSelection(root: HTMLElement, start: number, end: number) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let position = 0
+  let startNode: Node | null = null
+  let endNode: Node | null = null
+  let startOffset = 0
+  let endOffset = 0
+  while (walker.nextNode()) {
+    const node = walker.currentNode
+    const length = node.textContent?.length ?? 0
+    if (!startNode && start <= position + length) { startNode = node; startOffset = start - position }
+    if (!endNode && end <= position + length) { endNode = node; endOffset = end - position; break }
+    position += length
+  }
+  if (!startNode || !endNode) return
+  const selection = window.getSelection()
+  if (!selection) return
+  const range = document.createRange()
+  range.setStart(startNode, Math.max(0, startOffset))
+  range.setEnd(endNode, Math.max(0, endOffset))
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+function normalizeAnnotations(value: unknown, sourceText: string): Annotation[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return []
+    const candidate = item as Partial<Annotation>
+    const start = Number(candidate.start)
+    const end = Number(candidate.end)
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > sourceText.length) return []
+    const reportedText = typeof candidate.text === 'string' ? candidate.text : ''
+    const exactText = reportedText && sourceText.slice(start, end) !== reportedText
+      ? sourceText.indexOf(reportedText)
+      : start
+    const resolvedStart = exactText >= 0 ? exactText : start
+    const resolvedEnd = resolvedStart + (reportedText ? reportedText.length : end - start)
+    if (resolvedEnd > sourceText.length || resolvedEnd <= resolvedStart) return []
+    const text = sourceText.slice(resolvedStart, resolvedEnd)
+    return [{
+      id: typeof candidate.id === 'string' ? candidate.id : `annotation-${index}`,
+      start: resolvedStart, end: resolvedEnd, text,
+      category: typeof candidate.category === 'string' ? candidate.category as Category : 'style',
+      label: typeof candidate.label === 'string' ? candidate.label : 'Feedback',
+      hint: typeof candidate.hint === 'string' ? candidate.hint : '',
+      explanation: typeof candidate.explanation === 'string' ? candidate.explanation : '',
+      correction: typeof candidate.correction === 'string' ? candidate.correction : '',
+      rule: typeof candidate.rule === 'string' ? candidate.rule : 'Swedish usage',
+    }]
+  })
 }
 
 export function ScrivEditor() {
@@ -27,17 +105,9 @@ export function ScrivEditor() {
   const [mode, setMode] = useState<'notice' | 'hint' | 'explain' | 'correction'>('notice')
   const [annotations, setAnnotations] = useState(demoAnnotations)
   const [thinking, setThinking] = useState(false)
-  const [apiProvider, setApiProvider] = useState<string | null>(null)
-  const [feedbackWarning, setFeedbackWarning] = useState<string | null>(null)
   const requestId = useRef(0)
   const editorRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    fetch('/api/feedback')
-      .then((response) => response.json())
-      .then((data) => setApiProvider(data.configured === true ? data.provider ?? 'AI' : 'Unavailable'))
-      .catch(() => setApiProvider('Unavailable'))
-  }, [])
+  const pendingSelection = useRef<{ start: number; end: number } | null>(null)
 
   useEffect(() => {
     const current = ++requestId.current
@@ -46,14 +116,8 @@ export function ScrivEditor() {
       try {
         const response = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, level }) })
         const data = await response.json()
-        console.log('[v0] Feedback API response:', { status: response.status, data })
-        if (current === requestId.current) {
-          setFeedbackWarning(typeof data.warning === 'string' ? data.warning : null)
-          if (Array.isArray(data.annotations)) setAnnotations(data.annotations)
-        }
-      } catch {
-        if (current === requestId.current) setFeedbackWarning('Feedback could not be reached. Please try again.')
-      }
+        if (current === requestId.current) setAnnotations(normalizeAnnotations(data.annotations, text))
+      } catch { /* The sample feedback keeps the editor useful without an API key. */ }
       if (current === requestId.current) setThinking(false)
     }, 1200)
     return () => window.clearTimeout(timer)
@@ -63,9 +127,19 @@ export function ScrivEditor() {
     const editor = editorRef.current
     if (!editor) return
 
+    const selection = window.getSelection()
+    const hasSelection = selection && selection.rangeCount > 0 && editor.contains(selection.anchorNode) && editor.contains(selection.focusNode)
+    const savedSelection = pendingSelection.current
+    const selectionStart = savedSelection?.start ?? (hasSelection ? getSelectionOffset(editor, selection.anchorNode!, selection.anchorOffset) : 0)
+    const selectionEnd = savedSelection?.end ?? (hasSelection ? getSelectionOffset(editor, selection.focusNode!, selection.focusOffset) : 0)
     const valid = annotations
       .filter((a) => a.start >= 0 && a.end <= text.length && a.start < a.end)
       .sort((a, b) => a.start - b.start)
+    // An empty response means “no feedback”; do not rebuild the editable DOM.
+    if (valid.length === 0) {
+      pendingSelection.current = null
+      return
+    }
     let cursor = 0
     editor.replaceChildren()
     for (const annotation of valid) {
@@ -76,15 +150,32 @@ export function ScrivEditor() {
       span.className = `annotation ${categoryClass(annotation.category)}`
       span.append(document.createTextNode(text.slice(annotation.start, annotation.end)))
       const marker = document.createElement('sup')
-      marker.textContent = annotation.category === 'positive' ? '✓' : annotation.category === 'typo' ? 'TYPO' : annotation.category === 'word_order' ? 'WO' : annotation.category === 'noun_gender' ? 'GEN' : ''
+      marker.textContent = annotation.category === 'positive' ? '✓' : annotation.category === 'word_order' ? 'WO' : annotation.category === 'noun_gender' ? 'GEN' : ''
       span.append(marker)
       editor.append(span)
       cursor = annotation.end
     }
     if (cursor < text.length) editor.append(document.createTextNode(text.slice(cursor)))
+    if (hasSelection || savedSelection) restoreSelection(editor, selectionStart, selectionEnd)
+    pendingSelection.current = null
   }, [annotations])
 
   function updateText(event: React.FormEvent<HTMLDivElement>) {
+    // Remove demo/previous feedback immediately without replacing the editable root.
+    event.currentTarget.querySelectorAll('sup').forEach((marker) => marker.remove())
+    event.currentTarget.querySelectorAll('[data-annotation]').forEach((span) => {
+      const parent = span.parentNode
+      while (span.firstChild) parent?.insertBefore(span.firstChild, span)
+      parent?.removeChild(span)
+    })
+    setAnnotations([])
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0 && editorRef.current?.contains(selection.anchorNode) && editorRef.current.contains(selection.focusNode)) {
+      pendingSelection.current = {
+        start: getSelectionOffset(editorRef.current, selection.anchorNode!, selection.anchorOffset),
+        end: getSelectionOffset(editorRef.current, selection.focusNode!, selection.focusOffset),
+      }
+    }
     const copy = event.currentTarget.cloneNode(true) as HTMLElement
     copy.querySelectorAll('sup').forEach((marker) => marker.remove())
     setText(copy.textContent ?? '')
@@ -95,13 +186,13 @@ export function ScrivEditor() {
     <main className="min-h-screen bg-background text-foreground">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-7 lg:px-10">
         <div className="flex items-center gap-3"><div className="brand-mark">s</div><div><div className="font-serif text-xl leading-none tracking-tight">Skriv</div><div className="mt-1 text-xs text-muted-foreground">AI feedback that helps you learn Swedish</div></div></div>
-        <div className="flex items-center gap-3"><span className={`api-status-pill ${apiProvider && apiProvider !== 'Unavailable' ? 'ready' : apiProvider === 'Unavailable' ? 'unavailable' : ''}`} aria-label={apiProvider ? `${apiProvider} AI is configured` : 'Checking AI provider status'}><span className="api-status-dot" />{apiProvider ? `${apiProvider} AI` : 'Checking AI'}</span><label className="sr-only" htmlFor="level">Swedish level</label><div className="relative"><select id="level" value={level} onChange={(e) => setLevel(e.target.value)} className="appearance-none rounded-full border border-border bg-card py-2 pl-4 pr-9 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>A2</option><option>B1</option><option>B2</option></select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" /></div><button aria-label="Open settings" className="rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"><Settings2 className="h-4 w-4" /></button></div>
+        <div className="flex items-center gap-3"><label className="sr-only" htmlFor="level">Swedish level</label><div className="relative"><select id="level" value={level} onChange={(e) => setLevel(e.target.value)} className="appearance-none rounded-full border border-border bg-card py-2 pl-4 pr-9 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"><option>A2</option><option>B1</option><option>B2</option></select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" /></div><button aria-label="Open settings" className="rounded-full p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"><Settings2 className="h-4 w-4" /></button></div>
       </header>
 
       <section className="mx-auto w-full max-w-5xl px-6 pb-16 pt-12 lg:px-10 lg:pt-20">
         <div className="mx-auto max-w-3xl"><div className="mb-7 flex items-center justify-between"><div><p className="eyebrow">A quiet place to practice</p><h1 className="mt-2 font-serif text-3xl tracking-tight sm:text-4xl">Write your way there.</h1></div><div className="flex items-center gap-2 text-xs text-muted-foreground">{thinking && <><span className="thinking-dot" /> Thinking…</>}</div></div>
           <div className="editor-shell" onClick={() => selected && setSelected(null)}><div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Swedish writing editor" aria-multiline="true" onInput={updateText} onClick={(e) => { const target = e.target as HTMLElement; const id = target.dataset.annotation; if (id) { e.stopPropagation(); const found = annotations.find((a) => a.id === id); if (found) { setSelected(found); setMode('notice') } } }} className="editor min-h-80 whitespace-pre-wrap text-lg leading-[2.05] outline-none" spellCheck="false"></div>{selected && <FeedbackPopover annotation={selected} mode={mode} setMode={setMode} close={() => setSelected(null)} />}</div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Write naturally. Feedback appears as you pause.</p>{feedbackWarning && <p className="text-xs text-destructive" role="status">{feedbackWarning}</p>}<p className="text-xs text-muted-foreground">{text.length} characters</p></div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Write naturally. Feedback appears as you pause.</p><p className="text-xs text-muted-foreground">{text.length} characters</p></div>
           <Legend />
           <div className="mt-14 border-t border-border pt-6"><div className="flex items-center gap-2"><Lightbulb className="h-4 w-4 text-accent-foreground" /><h2 className="text-sm font-semibold">Things to notice</h2></div><div className="mt-4 flex flex-wrap gap-2">{['Word order · 2', 'Noun gender · 1', 'Natural phrasing · 2'].map((item) => <button key={item} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">{item}</button>)}</div><p className="mt-5 max-w-xl text-sm leading-6 text-muted-foreground">A few sentences have word order worth reviewing. See if you can spot the pattern before asking for a hint.</p></div>
         </div>

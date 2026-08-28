@@ -29,12 +29,6 @@
 .legend-mark.annotation-order { border-bottom: 2px dotted #7c63b8; }
 .legend-mark.annotation-natural { background: color-mix(in oklab, #d68c42 20%, transparent); border: 0; border-radius: 2px; }
 .legend-mark.annotation-positive { border-bottom-color: #669f7f; }
-.api-status-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 9px; color: var(--muted-foreground); background: color-mix(in oklab, var(--card) 80%, transparent); font-size: 11px; white-space: nowrap; }
-.api-status-pill.ready { border-color: color-mix(in oklab, #669f7f 45%, var(--border)); color: #47755c; }
-.api-status-pill.unavailable { color: #9a5a45; }
-.api-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-foreground); }
-.api-status-pill.ready .api-status-dot { background: #669f7f; }
-.api-status-pill.unavailable .api-status-dot { background: #bd6262; }
 .thinking-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite alternate; }
 @keyframes pulse { to { opacity: .25; transform: scale(.7); } } @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 640px) { .editor-shell { padding: 22px 20px 26px; } .editor { font-size: 17px; line-height: 1.9; } .feedback-popover { position: relative; right: auto; top: auto; margin-top: 18px; width: 100%; } }
