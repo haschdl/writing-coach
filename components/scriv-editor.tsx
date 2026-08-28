@@ -105,6 +105,7 @@ export function ScrivEditor() {
   const [mode, setMode] = useState<'notice' | 'hint' | 'explain' | 'correction'>('notice')
   const [annotations, setAnnotations] = useState(demoAnnotations)
   const [thinking, setThinking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const requestId = useRef(0)
   const editorRef = useRef<HTMLDivElement>(null)
   const pendingSelection = useRef<{ start: number; end: number } | null>(null)
@@ -112,13 +113,22 @@ export function ScrivEditor() {
   useEffect(() => {
     const current = ++requestId.current
     setThinking(true)
+    setError(null)
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, level }) })
-        const data = await response.json()
-        if (current === requestId.current) setAnnotations(normalizeAnnotations(data.annotations, text))
-      } catch { /* The sample feedback keeps the editor useful without an API key. */ }
-      if (current === requestId.current) setThinking(false)
+        const data = await response.json().catch(() => ({}))
+        if (current !== requestId.current) return
+        if (!response.ok || typeof data.error === 'string') {
+          setError(typeof data.error === 'string' ? data.error : `Feedback request failed (${response.status}).`)
+          return
+        }
+        setAnnotations(normalizeAnnotations(data.annotations, text))
+      } catch {
+        if (current === requestId.current) setError('Could not reach the feedback service.')
+      } finally {
+        if (current === requestId.current) setThinking(false)
+      }
     }, 1200)
     return () => window.clearTimeout(timer)
   }, [text, level])
@@ -191,6 +201,7 @@ export function ScrivEditor() {
 
       <section className="mx-auto w-full max-w-5xl px-6 pb-16 pt-12 lg:px-10 lg:pt-20">
         <div className="mx-auto max-w-3xl"><div className="mb-7 flex items-center justify-between"><div><p className="eyebrow">A quiet place to practice</p><h1 className="mt-2 font-serif text-3xl tracking-tight sm:text-4xl">Write your way there.</h1></div><div className="flex items-center gap-2 text-xs text-muted-foreground">{thinking && <><span className="thinking-dot" /> Thinking…</>}</div></div>
+          {error && <p role="alert" className="mb-4 rounded-xl border border-[#bd6262]/30 bg-[#bd6262]/8 px-4 py-3 text-sm leading-6 text-[#8a3f3f]">{error}</p>}
           <div className="editor-shell" onClick={() => selected && setSelected(null)}><div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Swedish writing editor" aria-multiline="true" onInput={updateText} onClick={(e) => { const target = e.target as HTMLElement; const id = target.dataset.annotation; if (id) { e.stopPropagation(); const found = annotations.find((a) => a.id === id); if (found) { setSelected(found); setMode('notice') } } }} className="editor min-h-80 whitespace-pre-wrap text-lg leading-[2.05] outline-none" spellCheck="false"></div>{selected && <FeedbackPopover annotation={selected} mode={mode} setMode={setMode} close={() => setSelected(null)} />}</div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Write naturally. Feedback appears as you pause.</p><p className="text-xs text-muted-foreground">{text.length} characters</p></div>
           <Legend />

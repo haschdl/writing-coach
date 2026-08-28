@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "NODE_OPTIONS=--use-system-ca next dev",
+    "build": "NODE_OPTIONS=--use-system-ca next build",
+    "start": "NODE_OPTIONS=--use-system-ca next start"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -13,7 +13,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
-    "next": "16.3.3",
+    "next": "16.3.2",
     "react": "^19",
     "react-dom": "^19",
     "shadcn": "^4.11.0",
