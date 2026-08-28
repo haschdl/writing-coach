@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground); --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground); --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring); --radius-sm: calc(var(--radius) * .6); --radius-md: calc(var(--radius) * .8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --font-sans: 'Geist', 'Geist Fallback'; --font-serif: 'DM Serif Display', 'Georgia', serif;
+}
+
+:root { color-scheme: light; --background: oklch(0.975 0.012 85); --foreground: oklch(0.23 0.025 265); --card: oklch(0.995 0.006 85); --card-foreground: oklch(0.23 0.025 265); --popover: oklch(0.995 0.006 85); --popover-foreground: oklch(0.23 0.025 265); --primary: oklch(0.29 0.07 260); --primary-foreground: oklch(0.98 0 0); --secondary: oklch(0.94 0.02 85); --secondary-foreground: oklch(0.29 0.07 260); --muted: oklch(0.94 0.018 85); --muted-foreground: oklch(0.53 0.03 260); --accent: oklch(0.75 0.12 75); --accent-foreground: oklch(0.35 0.08 65); --border: oklch(0.87 0.025 85); --input: oklch(0.87 0.025 85); --ring: oklch(0.55 0.1 260); --radius: .7rem; }
+
+@layer base { * { @apply border-border outline-ring/50; } body { @apply bg-background text-foreground font-sans; } }
+
+.brand-mark { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px 9px 9px 2px; background: var(--primary); color: var(--primary-foreground); font-family: Georgia, serif; font-size: 20px; font-style: italic; }
+.eyebrow { color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+.editor-shell { position: relative; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in oklab, var(--card) 82%, transparent); padding: 30px 32px 34px; box-shadow: 0 16px 45px color-mix(in oklab, var(--foreground) 5%, transparent); }
+.editor { caret-color: var(--primary); }
+.annotation { cursor: pointer; transition: background-color .2s ease; }
+.annotation:hover { background: color-mix(in oklab, var(--accent) 22%, transparent); }
+.annotation-order { border-bottom: 2px dotted #7c63b8; }
+.annotation-grammar { border-bottom: 2px solid #4e8fac; }
+.annotation-natural { background: color-mix(in oklab, #d68c42 14%, transparent); border-radius: 3px; }
+.annotation-positive { border-bottom: 2px solid #669f7f; }
+.annotation sup { margin-left: 2px; color: var(--muted-foreground); font-family: var(--font-sans); font-size: 8px; font-weight: 600; letter-spacing: .04em; vertical-align: super; }
+.feedback-popover { position: absolute; z-index: 10; right: 20px; top: calc(100% - 10px); width: min(330px, calc(100% - 40px)); border: 1px solid var(--border); border-radius: 12px; background: var(--popover); padding: 18px; box-shadow: 0 18px 45px color-mix(in oklab, var(--foreground) 14%, transparent); animation: pop .16s ease-out; }
+.popover-button { border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; color: var(--muted-foreground); font-size: 12px; transition: .2s ease; }
+.popover-button:hover, .popover-button.active { border-color: var(--primary); color: var(--primary); background: var(--secondary); }
+.legend-mark { width: 22px; height: 8px; display: inline-block; border-bottom: 2px solid #4e8fac; }
+.legend-mark.annotation-spelling { border-bottom: 2px wavy #bd6262; }
+.legend-mark.annotation-order { border-bottom: 2px dotted #7c63b8; }
+.legend-mark.annotation-natural { background: color-mix(in oklab, #d68c42 20%, transparent); border: 0; border-radius: 2px; }
+.legend-mark.annotation-positive { border-bottom-color: #669f7f; }
+.api-status-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 9px; color: var(--muted-foreground); background: color-mix(in oklab, var(--card) 80%, transparent); font-size: 11px; white-space: nowrap; }
+.api-status-pill.ready { border-color: color-mix(in oklab, #669f7f 45%, var(--border)); color: #47755c; }
+.api-status-pill.unavailable { color: #9a5a45; }
+.api-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-foreground); }
+.api-status-pill.ready .api-status-dot { background: #669f7f; }
+.api-status-pill.unavailable .api-status-dot { background: #bd6262; }
+.thinking-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite alternate; }
+@keyframes pulse { to { opacity: .25; transform: scale(.7); } } @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 640px) { .editor-shell { padding: 22px 20px 26px; } .editor { font-size: 17px; line-height: 1.9; } .feedback-popover { position: relative; right: auto; top: auto; margin-top: 18px; width: 100%; } }
