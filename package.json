@@ -2,10 +2,11 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.4.0",
   "scripts": {
-    "dev": "NODE_OPTIONS=--use-system-ca next dev",
-    "build": "NODE_OPTIONS=--use-system-ca next build",
-    "start": "NODE_OPTIONS=--use-system-ca next start"
+    "dev": "NODE_OPTIONS=--use-system-ca bun run --bun next dev",
+    "build": "NODE_OPTIONS=--use-system-ca bun run --bun next build",
+    "start": "NODE_OPTIONS=--use-system-ca bun run --bun next start"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
