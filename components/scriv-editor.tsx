@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { ChevronDown, Lightbulb, Settings2, Sparkles, X } from 'lucide-react'
 
+import { TutorMobileTrigger, TutorPanel, useTutorPanelState } from '@/components/tutor-panel'
 import {
   aggregatePatterns,
   mergeAnnotations,
@@ -10,7 +11,14 @@ import {
   patternsSummarySentence,
   preserveAnnotationsAfterEdit,
 } from '@/lib/annotations'
+import {
+  getEditorContext,
+  getSelectionOffset,
+  readEditorText,
+  restoreSelection,
+} from '@/lib/editor-text'
 import type { Annotation, Category } from '@/lib/feedback-types'
+import type { CEFRLevel } from '@/lib/tutor-types'
 import { buildAnalysisRegion, debounceMsForEdit, findSentenceSpans, sentenceIndexAt } from '@/lib/sentences'
 
 const sampleText =
@@ -90,60 +98,6 @@ function categoryClass(category: Category) {
   )
 }
 
-function getSelectionOffset(root: HTMLElement, node: Node, offset: number) {
-  let total = 0
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (current) =>
-      current.parentElement?.closest('sup') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
-  })
-  while (walker.nextNode()) {
-    const current = walker.currentNode
-    if (current === node) return total + offset
-    total += current.textContent?.length ?? 0
-  }
-  return total
-}
-
-function restoreSelection(root: HTMLElement, start: number, end: number) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  let position = 0
-  let startNode: Node | null = null
-  let endNode: Node | null = null
-  let startOffset = 0
-  let endOffset = 0
-  while (walker.nextNode()) {
-    const node = walker.currentNode
-    if (node.parentElement?.closest('sup')) {
-      continue
-    }
-    const length = node.textContent?.length ?? 0
-    if (!startNode && start <= position + length) {
-      startNode = node
-      startOffset = start - position
-    }
-    if (!endNode && end <= position + length) {
-      endNode = node
-      endOffset = end - position
-      break
-    }
-    position += length
-  }
-  if (!startNode || !endNode) return
-  const selection = window.getSelection()
-  if (!selection) return
-  const range = document.createRange()
-  range.setStart(startNode, Math.max(0, startOffset))
-  range.setEnd(endNode, Math.max(0, endOffset))
-  selection.removeAllRanges()
-  selection.addRange(range)
-}
-
-function readEditorText(editor: HTMLElement) {
-  const copy = editor.cloneNode(true) as HTMLElement
-  copy.querySelectorAll('sup').forEach((marker) => marker.remove())
-  return copy.textContent ?? ''
-}
-
 function isDev() {
   return process.env.NODE_ENV === 'development'
 }
@@ -154,7 +108,8 @@ function logClientTiming(label: string, data: Record<string, unknown>) {
 
 export function ScrivEditor() {
   const [text, setText] = useState(sampleText)
-  const [level, setLevel] = useState('B1')
+  const [level, setLevel] = useState<CEFRLevel>('B1')
+  const { desktopOpen, setDesktopOpen, mobileOpen, setMobileOpen } = useTutorPanelState()
   const [selected, setSelected] = useState<Annotation | null>(null)
   const [mode, setMode] = useState<'hint' | 'explain' | 'correction'>('hint')
   const [annotations, setAnnotations] = useState(demoAnnotations)
@@ -174,6 +129,14 @@ export function ScrivEditor() {
   selectedIdRef.current = selected?.id ?? null
   const annotationsRef = useRef(annotations)
   annotationsRef.current = annotations
+  const textRef = useRef(text)
+  textRef.current = text
+
+  const getTutorEditorContext = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return {}
+    return getEditorContext(editor, textRef.current)
+  }, [])
 
   // Live analysis — incremental region, debounce, abort + request id.
   useEffect(() => {
@@ -416,7 +379,7 @@ export function ScrivEditor() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-7 lg:px-10">
+      <header className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-6 py-7 lg:px-10">
         <div className="flex items-center gap-3">
           <div className="brand-mark">s</div>
           <div>
@@ -425,6 +388,7 @@ export function ScrivEditor() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <TutorMobileTrigger onClick={() => setMobileOpen(true)} />
           <label className="sr-only" htmlFor="level">
             Swedish level
           </label>
@@ -433,14 +397,14 @@ export function ScrivEditor() {
               id="level"
               value={level}
               onChange={(e) => {
-                setLevel(e.target.value)
+                setLevel(e.target.value as CEFRLevel)
                 setAnalysisNonce((n) => n + 1)
               }}
               className="appearance-none rounded-full border border-border bg-card py-2 pl-4 pr-9 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option>A2</option>
-              <option>B1</option>
-              <option>B2</option>
+              <option value="A2">A2</option>
+              <option value="B1">B1</option>
+              <option value="B2">B2</option>
             </select>
             <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
           </div>
@@ -453,8 +417,9 @@ export function ScrivEditor() {
         </div>
       </header>
 
-      <section className="mx-auto w-full max-w-5xl px-6 pb-16 pt-12 lg:px-10 lg:pt-20">
-        <div className="mx-auto max-w-3xl">
+      <div className="workspace-shell mx-auto flex w-full max-w-[1600px] min-h-[calc(100vh-88px)]">
+        <section className="workspace-editor min-w-0 flex-1 px-6 pb-16 pt-8 lg:px-10 lg:pt-12">
+          <div className="mx-auto max-w-3xl lg:max-w-none lg:pr-6">
           <div className="mb-7 flex items-center justify-between">
             <div>
               <p className="eyebrow">A quiet place to practice</p>
@@ -552,8 +517,19 @@ export function ScrivEditor() {
             </div>
             <p className="mt-5 max-w-xl text-sm leading-6 text-muted-foreground">{patternsSummarySentence(patterns)}</p>
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
+
+        <TutorPanel
+          level={level}
+          document={text}
+          getEditorContext={getTutorEditorContext}
+          desktopOpen={desktopOpen}
+          onDesktopOpenChange={setDesktopOpen}
+          mobileOpen={mobileOpen}
+          onMobileOpenChange={setMobileOpen}
+        />
+      </div>
     </main>
   )
 }
