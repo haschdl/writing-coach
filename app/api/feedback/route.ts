@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server'
 
-import { buildFeedbackPrompt, feedbackSystemPrompt } from '@/config/feedback'
-import { describeNetworkError } from '@/lib/network-error'
+import {
+  buildLiveFeedbackUserPrompt,
+  liveFeedbackSchema,
+  liveFeedbackSystemPrompt,
+} from '@/config/feedback'
+import { LIVE_FEEDBACK_MODEL, LIVE_FEEDBACK_REASONING_EFFORT } from '@/config/models'
+import { createStructuredResponse, isAbortError, MissingApiKeyError } from '@/lib/openai'
 
-const schema = {
-  type: 'object',
-  properties: {
-    annotations: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, start: { type: 'integer' }, end: { type: 'integer' }, text: { type: 'string' }, category: { type: 'string' }, label: { type: 'string' }, hint: { type: 'string' }, explanation: { type: 'string' }, correction: { type: 'string' }, rule: { type: 'string' } }, required: ['id', 'start', 'end', 'text', 'category', 'label', 'hint', 'explanation', 'correction', 'rule'], additionalProperties: false } },
-    patterns: { type: 'array', items: { type: 'object', properties: { category: { type: 'string' }, count: { type: 'integer' }, message: { type: 'string' } }, required: ['category', 'count', 'message'], additionalProperties: false } },
-  }, required: ['annotations', 'patterns'], additionalProperties: false,
+type LiveBody = {
+  text?: unknown
+  level?: unknown
+  contextBefore?: unknown
+  contextAfter?: unknown
+  documentOffset?: unknown
 }
 
 function fail(message: string, status: number) {
@@ -16,61 +21,59 @@ function fail(message: string, status: number) {
 }
 
 export async function POST(request: Request) {
-  let body: { text?: unknown; level?: unknown }
+  const totalStarted = performance.now()
+  let body: LiveBody
   try {
     body = await request.json()
   } catch {
     return fail('Request body must be JSON.', 400)
   }
 
-  const { text, level } = body
-  if (typeof text !== 'string' || text.length > 12000) return fail('Invalid text.', 400)
-  if (!process.env.OPENAI_API_KEY) {
-    return fail('OPENAI_API_KEY is missing. Add it to .env or .env.local, then restart the dev server.', 503)
+  const text = body.text
+  if (typeof text !== 'string' || text.length === 0 || text.length > 4000) {
+    return fail('Invalid text.', 400)
   }
 
-  const prompt = buildFeedbackPrompt(text, level)
+  const level = typeof body.level === 'string' && body.level.trim() ? body.level.trim() : 'B1'
+  const contextBefore = typeof body.contextBefore === 'string' ? body.contextBefore.slice(0, 2000) : ''
+  const contextAfter = typeof body.contextAfter === 'string' ? body.contextAfter.slice(0, 2000) : ''
+  const documentOffset =
+    typeof body.documentOffset === 'number' && Number.isInteger(body.documentOffset) && body.documentOffset >= 0
+      ? body.documentOffset
+      : 0
+
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        temperature: 0.2,
-        messages: [
-          { role: 'system', content: feedbackSystemPrompt },
-          { role: 'user', content: prompt },
-        ],
-        response_format: { type: 'json_schema', json_schema: { name: 'swedish_feedback', strict: true, schema } },
-      }),
+    const { data, modelMs } = await createStructuredResponse<{ annotations: unknown[] }>({
+      model: LIVE_FEEDBACK_MODEL,
+      reasoningEffort: LIVE_FEEDBACK_REASONING_EFFORT,
+      system: liveFeedbackSystemPrompt,
+      user: buildLiveFeedbackUserPrompt({ level, text, contextBefore, contextAfter }),
+      schemaName: 'swedish_live_feedback',
+      schema: liveFeedbackSchema as unknown as Record<string, unknown>,
+      signal: request.signal,
     })
-    if (!response.ok) {
-      const detail = await openaiError(response)
-      return fail(detail, 502)
-    }
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content
-    if (typeof content !== 'string' || content.length === 0) {
-      return fail('OpenAI returned an empty response.', 502)
-    }
-    try {
-      return NextResponse.json(JSON.parse(content))
-    } catch {
-      return fail('OpenAI returned invalid JSON.', 502)
-    }
-  } catch (error) {
-    return fail(describeNetworkError(error), 502)
-  }
-}
 
-async function openaiError(response: Response) {
-  try {
-    const payload = await response.json()
-    if (typeof payload?.error?.message === 'string' && payload.error.message.length > 0) {
-      return payload.error.message
+    const totalMs = Math.round(performance.now() - totalStarted)
+    const payload = {
+      annotations: Array.isArray(data.annotations) ? data.annotations.slice(0, 4) : [],
+      documentOffset,
+      timing: { modelMs, totalMs },
     }
-  } catch {
-    /* Use the status line when the error body is not JSON. */
+
+    const response = NextResponse.json(payload)
+    response.headers.set('Server-Timing', `model;dur=${modelMs}, total;dur=${totalMs}`)
+    if (process.env.NODE_ENV === 'development') {
+      console.info('[feedback/live]', { model: LIVE_FEEDBACK_MODEL, modelMs, totalMs, chars: text.length })
+    }
+    return response
+  } catch (error) {
+    if (isAbortError(error)) {
+      return fail('Aborted.', 499)
+    }
+    if (error instanceof MissingApiKeyError) {
+      return fail(error.message, 503)
+    }
+    const message = error instanceof Error ? error.message : 'Feedback request failed.'
+    return fail(message, 502)
   }
-  return `OpenAI request failed (${response.status} ${response.statusText}).`
 }
