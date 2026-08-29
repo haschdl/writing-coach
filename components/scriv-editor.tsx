@@ -674,7 +674,7 @@ function FeedbackPopover({
       loading && !annotation.explanation ? (
         <span className="text-muted-foreground">Loading explanation…</span>
       ) : (
-        annotation.explanation || detailError || annotation.hint
+        annotation.explanation || (detailError ? null : annotation.hint)
       )
     ) : mode === 'correction' ? (
       loading && !annotation.correction ? (
@@ -684,8 +684,8 @@ function FeedbackPopover({
           <span className="text-muted-foreground">Try: </span>
           <strong>{annotation.correction}</strong>
         </>
-      ) : (
-        detailError || annotation.hint
+      ) : detailError ? null : (
+        annotation.hint
       )
     ) : (
       annotation.hint
