@@ -35,6 +35,11 @@ export function preserveAnnotationsAfterEdit(
   invalidateStart: number,
   invalidateEnd: number,
 ): Annotation[] {
+  if (previousText === nextText) {
+    // No textual change (e.g. accidental re-entry) — keep marks as-is.
+    return previousAnnotations
+  }
+
   const { start: editStart, endPrev, endNext } = findEditBounds(previousText, nextText)
   const delta = endNext - endPrev
 

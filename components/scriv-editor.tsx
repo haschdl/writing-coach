@@ -160,6 +160,8 @@ export function ScrivEditor() {
   const [annotations, setAnnotations] = useState(demoAnnotations)
   const [thinking, setThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Bumped only on real user edits / level changes so Strict Mode remounts do not analyze. */
+  const [analysisNonce, setAnalysisNonce] = useState(0)
   const requestId = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -167,7 +169,6 @@ export function ScrivEditor() {
   const previousTextRef = useRef(sampleText)
   const analysisRegionRef = useRef(buildAnalysisRegion('', sampleText))
   const lastKeystrokeRef = useRef(0)
-  const skipInitialFetch = useRef(true)
   const previousLevelRef = useRef(level)
   const selectedIdRef = useRef<string | null>(null)
   selectedIdRef.current = selected?.id ?? null
@@ -176,12 +177,7 @@ export function ScrivEditor() {
 
   // Live analysis — incremental region, debounce, abort + request id.
   useEffect(() => {
-    if (skipInitialFetch.current) {
-      skipInitialFetch.current = false
-      previousTextRef.current = text
-      previousLevelRef.current = level
-      return
-    }
+    if (analysisNonce === 0) return
 
     const previousText = previousTextRef.current
     const levelChanged = previousLevelRef.current !== level
@@ -307,7 +303,7 @@ export function ScrivEditor() {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [text, level])
+  }, [analysisNonce, text, level])
 
   // Rebuild annotated DOM when annotations change — preserve caret.
   useEffect(() => {
@@ -404,6 +400,7 @@ export function ScrivEditor() {
     const next = readEditorText(editor)
     if (next === text) return
     setText(next)
+    setAnalysisNonce((n) => n + 1)
   }
 
   function updateAnnotationDetails(id: string, details: { explanation: string; correction: string; rule: string }) {
@@ -435,7 +432,10 @@ export function ScrivEditor() {
             <select
               id="level"
               value={level}
-              onChange={(e) => setLevel(e.target.value)}
+              onChange={(e) => {
+                setLevel(e.target.value)
+                setAnalysisNonce((n) => n + 1)
+              }}
               className="appearance-none rounded-full border border-border bg-card py-2 pl-4 pr-9 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option>A2</option>
@@ -483,15 +483,31 @@ export function ScrivEditor() {
               aria-multiline="true"
               onInput={updateText}
               onClick={(e) => {
-                const target = (e.target as HTMLElement).closest('[data-annotation]') as HTMLElement | null
+                const node = e.target
+                const el = node instanceof Element ? node : (node as Node).parentElement
+                const target = el?.closest('[data-annotation]') as HTMLElement | null
                 const id = target?.dataset.annotation
                 if (id) {
                   e.stopPropagation()
-                  const found = annotations.find((a) => a.id === id)
+                  const found = annotationsRef.current.find((a) => a.id === id)
                   if (found) {
                     setSelected(found)
                     setMode('hint')
                   }
+                }
+              }}
+              onMouseDown={(e) => {
+                // Select annotation on mousedown so contentEditable caret placement cannot race-clear it.
+                const node = e.target
+                const el = node instanceof Element ? node : (node as Node).parentElement
+                const target = el?.closest('[data-annotation]') as HTMLElement | null
+                const id = target?.dataset.annotation
+                if (!id) return
+                e.stopPropagation()
+                const found = annotationsRef.current.find((a) => a.id === id)
+                if (found) {
+                  setSelected(found)
+                  setMode('hint')
                 }
               }}
               className="editor min-h-80 whitespace-pre-wrap text-lg leading-[2.05] outline-none"
