@@ -29,8 +29,8 @@ const demoAnnotations: Annotation[] = [
   },
   {
     id: 'sub',
-    start: 49,
-    end: 58,
+    start: 40,
+    end: 49,
     text: 'hade inte',
     category: 'subordinate_clause',
     label: 'Subordinate clause',
@@ -39,8 +39,8 @@ const demoAnnotations: Annotation[] = [
   },
   {
     id: 'gender',
-    start: 86,
-    end: 95,
+    start: 79,
+    end: 88,
     text: 'ett banan',
     category: 'noun_gender',
     label: 'Noun gender',
@@ -49,8 +49,8 @@ const demoAnnotations: Annotation[] = [
   },
   {
     id: 'natural',
-    start: 190,
-    end: 207,
+    start: 180,
+    end: 195,
     text: 'en mycket rolig',
     category: 'idiomatic',
     label: 'Natural Swedish',
@@ -59,8 +59,8 @@ const demoAnnotations: Annotation[] = [
   },
   {
     id: 'positive',
-    start: 128,
-    end: 160,
+    start: 112,
+    end: 134,
     text: 'Efter det träffade jag',
     category: 'positive',
     label: 'Good usage',
