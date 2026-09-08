@@ -20,6 +20,40 @@ function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status })
 }
 
+function enforceVerdict(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value
+
+  const annotation = value as Record<string, unknown>
+  const verdict = annotation.verdict
+
+  if (verdict === 'correct') {
+    return {
+      ...annotation,
+      category: 'positive',
+      kind: 'positive',
+      label: 'Good usage',
+    }
+  }
+
+  if (verdict === 'optional_alternative') {
+    return {
+      ...annotation,
+      category: annotation.category === 'positive' ? 'idiomatic' : annotation.category,
+      kind: 'naturalness',
+    }
+  }
+
+  if (verdict === 'change_required') {
+    return {
+      ...annotation,
+      category: annotation.category === 'positive' ? 'style' : annotation.category,
+      kind: 'error',
+    }
+  }
+
+  return annotation
+}
+
 export async function POST(request: Request) {
   const totalStarted = performance.now()
   let body: LiveBody
@@ -55,7 +89,7 @@ export async function POST(request: Request) {
 
     const totalMs = Math.round(performance.now() - totalStarted)
     const payload = {
-      annotations: Array.isArray(data.annotations) ? data.annotations.slice(0, 4) : [],
+      annotations: Array.isArray(data.annotations) ? data.annotations.slice(0, 4).map(enforceVerdict) : [],
       documentOffset,
       timing: { modelMs, totalMs },
     }
