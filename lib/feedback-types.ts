@@ -12,6 +12,7 @@ export type Category =
   | 'positive'
 
 export type AnnotationKind = 'error' | 'naturalness' | 'positive'
+export type FeedbackVerdict = 'change_required' | 'optional_alternative' | 'correct'
 
 export type Annotation = {
   id: string
@@ -24,6 +25,7 @@ export type Annotation = {
   hint: string
   confidence?: number
   /** Lazily loaded deep feedback */
+  verdict?: FeedbackVerdict
   explanation?: string
   correction?: string
   rule?: string
@@ -58,6 +60,7 @@ export type DeepFeedbackRequest = {
 }
 
 export type DeepFeedbackResponse = {
+  verdict: FeedbackVerdict
   explanation: string
   correction: string
   rule: string
