@@ -10,7 +10,7 @@ import {
   patternsSummarySentence,
   preserveAnnotationsAfterEdit,
 } from '@/lib/annotations'
-import type { Annotation, Category } from '@/lib/feedback-types'
+import type { Annotation, Category, FeedbackVerdict } from '@/lib/feedback-types'
 import { buildAnalysisRegion, debounceMsForEdit, findSentenceSpans, sentenceIndexAt } from '@/lib/sentences'
 
 const sampleText =
@@ -66,6 +66,7 @@ const demoAnnotations: Annotation[] = [
     label: 'Good usage',
     kind: 'positive',
     hint: 'Notice how the verb moves after “Efter det”.',
+    verdict: 'correct',
     explanation: 'Nice inversion after the introductory phrase “Efter det”. You used the V2 pattern well here.',
     correction: 'Efter det träffade jag',
     rule: 'V2 ✓',
@@ -403,13 +404,63 @@ export function ScrivEditor() {
     setAnalysisNonce((n) => n + 1)
   }
 
-  function updateAnnotationDetails(id: string, details: { explanation: string; correction: string; rule: string }) {
+  function updateAnnotationDetails(
+    id: string,
+    details: { verdict: FeedbackVerdict; explanation: string; correction: string; rule: string },
+  ) {
     setAnnotations((prev) => {
-      const next = prev.map((a) => (a.id === id ? { ...a, ...details } : a))
+      const next: Annotation[] = prev.map((annotation) => {
+        if (annotation.id !== id) return annotation
+
+        if (details.verdict === 'correct') {
+          return {
+            ...annotation,
+            ...details,
+            category: 'positive',
+            kind: 'positive',
+            label: 'Good usage',
+          }
+        }
+
+        if (details.verdict === 'optional_alternative') {
+          return {
+            ...annotation,
+            ...details,
+            category: annotation.category === 'positive' ? 'idiomatic' : annotation.category,
+            kind: 'naturalness',
+          }
+        }
+
+        return {
+          ...annotation,
+          ...details,
+          category: annotation.category === 'positive' ? 'style' : annotation.category,
+          kind: 'error',
+        }
+      })
       annotationsRef.current = next
       return next
     })
-    setSelected((prev) => (prev && prev.id === id ? { ...prev, ...details } : prev))
+    setSelected((prev) => {
+      if (!prev || prev.id !== id) return prev
+      if (details.verdict === 'correct') {
+        return { ...prev, ...details, category: 'positive', kind: 'positive', label: 'Good usage' }
+      }
+      if (details.verdict === 'optional_alternative') {
+        return {
+          ...prev,
+          ...details,
+          category: prev.category === 'positive' ? 'idiomatic' : prev.category,
+          kind: 'naturalness',
+        }
+      }
+      return {
+        ...prev,
+        ...details,
+        category: prev.category === 'positive' ? 'style' : prev.category,
+        kind: 'error',
+      }
+    })
   }
 
   const patterns = aggregatePatterns(annotations)
@@ -593,13 +644,29 @@ function FeedbackPopover({
   level: string
   documentText: string
   close: () => void
-  onDetailsLoaded: (id: string, details: { explanation: string; correction: string; rule: string }) => void
+  onDetailsLoaded: (
+    id: string,
+    details: { verdict: FeedbackVerdict; explanation: string; correction: string; rule: string },
+  ) => void
 }) {
   const [loading, setLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const hasDetails = Boolean(annotation.explanation && annotation.correction)
+  const correctionIsNoop = Boolean(
+    annotation.correction && annotation.correction.trim() === annotation.text.trim(),
+  )
+  const effectivelyPositive =
+    annotation.kind === 'positive' ||
+    annotation.category === 'positive' ||
+    annotation.verdict === 'correct' ||
+    correctionIsNoop
+  const hasDetails = Boolean(
+    annotation.explanation &&
+      annotation.verdict &&
+      (annotation.verdict === 'correct' || annotation.correction),
+  )
+  const isAlternative = annotation.kind === 'naturalness' || annotation.verdict === 'optional_alternative'
 
   async function ensureDetails() {
     if (hasDetails || loading) return
@@ -644,7 +711,12 @@ function FeedbackPopover({
         setDetailError(typeof data.error === 'string' ? data.error : 'Could not load explanation.')
         return
       }
+      const verdict: FeedbackVerdict =
+        data.verdict === 'correct' || data.verdict === 'optional_alternative' || data.verdict === 'change_required'
+          ? data.verdict
+          : 'change_required'
       onDetailsLoaded(annotation.id, {
+        verdict,
         explanation: String(data.explanation ?? ''),
         correction: String(data.correction ?? ''),
         rule: String(data.rule ?? 'Swedish usage'),
@@ -678,14 +750,14 @@ function FeedbackPopover({
       )
     ) : mode === 'correction' ? (
       loading && !annotation.correction ? (
-        <span className="text-muted-foreground">Loading correction…</span>
-      ) : annotation.correction ? (
+        <span className="text-muted-foreground">{isAlternative ? 'Loading alternative…' : 'Loading correction…'}</span>
+      ) : annotation.correction && !correctionIsNoop ? (
         <>
-          <span className="text-muted-foreground">Try: </span>
+          <span className="text-muted-foreground">{isAlternative ? 'Alternative: ' : 'Try: '}</span>
           <strong>{annotation.correction}</strong>
         </>
       ) : detailError ? null : (
-        annotation.hint
+        annotation.explanation || annotation.hint
       )
     ) : (
       annotation.hint
@@ -707,7 +779,7 @@ function FeedbackPopover({
           <X className="h-4 w-4" />
         </button>
       </div>
-      {annotation.kind === 'positive' || annotation.category === 'positive' ? (
+      {effectivelyPositive ? (
         <p className="mt-4 text-sm leading-6 text-foreground/75">
           {annotation.explanation || annotation.hint}
           {!annotation.explanation && (
@@ -739,7 +811,7 @@ function FeedbackPopover({
               onClick={() => void requestMode(mode === 'correction' ? 'hint' : 'correction')}
               className={`popover-button ${mode === 'correction' ? 'active' : ''}`}
             >
-              Show correction
+              {isAlternative ? 'Show alternative' : 'Show correction'}
             </button>
           </div>
         </>
