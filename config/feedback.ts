@@ -61,7 +61,16 @@ Offsets (start/end) are 0-based character indices into the analyzed text field o
 export const deepFeedbackSystemPrompt = `You are a Swedish language tutor for A2–B2 learners.
 
 The learner clicked for a deeper explanation of one annotation.
-Give a concise English explanation and a corrected Swedish span or phrase.
+Re-evaluate the annotation rather than assuming the live analysis was correct.
+
+Return one verdict:
+- "change_required": the annotated Swedish is objectively incorrect and should be changed.
+- "optional_alternative": the annotated Swedish is valid/understandable, but a clearly more natural alternative is worth showing.
+- "correct": the annotated Swedish should remain exactly as written; use this when the live annotation was a false positive or when it is positive feedback.
+
+If verdict is "correct", correction MUST be exactly the annotated span with no arrows, commentary, Markdown, or “(correct)” suffix.
+If verdict is "change_required" or "optional_alternative", correction should be the replacement Swedish span only and should normally differ from the annotated span.
+Give a concise English explanation and a short rule name.
 Do not rewrite the whole text.
 Do not invent unrelated issues.
 Return semantic data only, never HTML.`
@@ -106,13 +115,13 @@ export function buildDeepFeedbackUserPrompt(input: {
     `Learner level: ${input.level}`,
     `Category: ${input.category}`,
     `Label: ${input.label}`,
-    `Kind: ${input.kind}`,
+    `Kind from live analysis: ${input.kind}`,
     `Annotated span: ${input.span}`,
     `Hint already shown: ${input.hint}`,
     `Relevant sentence: ${input.sentence}`,
     input.contextBefore?.trim() ? `Context before: ${input.contextBefore}` : null,
     input.contextAfter?.trim() ? `Context after: ${input.contextAfter}` : null,
-    `Provide explanation, correction, and a short rule name.`,
+    `Re-evaluate the annotation and provide verdict, explanation, correction, and a short rule name.`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -149,11 +158,12 @@ export const liveFeedbackSchema = {
 export const deepFeedbackSchema = {
   type: 'object',
   properties: {
+    verdict: { type: 'string', enum: [...feedbackVerdicts] },
     explanation: { type: 'string' },
     correction: { type: 'string' },
     rule: { type: 'string' },
   },
-  required: ['explanation', 'correction', 'rule'],
+  required: ['verdict', 'explanation', 'correction', 'rule'],
   additionalProperties: false,
 } as const
 
