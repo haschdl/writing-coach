@@ -47,6 +47,7 @@ export async function POST(request: Request) {
 
   try {
     const { data, modelMs } = await createStructuredResponse<{
+      verdict: 'change_required' | 'optional_alternative' | 'correct'
       explanation: string
       correction: string
       rule: string
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
 
     const totalMs = Math.round(performance.now() - totalStarted)
     const response = NextResponse.json({
+      verdict: data.verdict,
       explanation: data.explanation,
       correction: data.correction,
       rule: data.rule,
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
     })
     response.headers.set('Server-Timing', `model;dur=${modelMs}, total;dur=${totalMs}`)
     if (process.env.NODE_ENV === 'development') {
-      console.info('[feedback/details]', { model: DEEP_FEEDBACK_MODEL, modelMs, totalMs })
+      console.info('[feedback/details]', { model: DEEP_FEEDBACK_MODEL, modelMs, totalMs, verdict: data.verdict })
     }
     return response
   } catch (error) {
