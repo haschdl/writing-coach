@@ -8,3 +8,6 @@ export const LIVE_FEEDBACK_REASONING_EFFORT = 'none' as const
 export const DEEP_FEEDBACK_MODEL = 'gpt-5.4-nano'
 
 export const DEEP_FEEDBACK_REASONING_EFFORT = 'none' as const
+
+/** Conversational tutor — richer explanations than live feedback; still latency-oriented. */
+export const TUTOR_CHAT_MODEL = 'gpt-4.1-mini'

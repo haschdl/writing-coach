@@ -1,5 +1,5 @@
-import { ScrivEditor } from '@/components/scriv-editor'
+import { WritingWorkspace } from '@/components/writing-workspace'
 
 export default function Page() {
-  return <ScrivEditor />
+  return <WritingWorkspace />
 }
