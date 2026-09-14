@@ -80,3 +80,38 @@ export function isAbortError(error: unknown) {
   if (name === 'AbortError' || name === 'APIUserAbortError') return true
   return false
 }
+
+type StreamTextInputItem = {
+  role: 'user' | 'assistant' | 'developer' | 'system'
+  content: string
+}
+
+export async function createStreamingTextResponse(options: {
+  model: string
+  instructions: string
+  input: StreamTextInputItem[] | string
+  signal?: AbortSignal
+}) {
+  const openai = getOpenAIClient()
+
+  try {
+    const stream = await openai.responses.create(
+      {
+        model: options.model,
+        instructions: options.instructions,
+        input: options.input,
+        stream: true,
+      },
+      options.signal ? { signal: options.signal } : undefined,
+    )
+
+    return stream
+  } catch (error) {
+    if (error instanceof MissingApiKeyError) throw error
+    if (isAbortError(error)) throw error
+    if (error instanceof OpenAI.APIError) {
+      throw new Error(error.message || `OpenAI request failed (${error.status}).`)
+    }
+    throw new Error(describeNetworkError(error))
+  }
+}
